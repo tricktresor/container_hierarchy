@@ -13,10 +13,19 @@ public section.
 
   methods SHOW
     importing
-      !IO_CONTAINER type ref to CL_GUI_CONTROL .
+      !IO_CONTROL type ref to CL_GUI_CONTROL optional
+      !IV_OBJECT_ID type I optional .
   methods CONSTRUCTOR
     importing
-      !IV_REPID type SYREPID .
+      !IV_REPID type SYREPID optional .
+  class-methods FACTORY
+    importing
+      !IV_REPID type SYREPID optional
+    returning
+      value(RO_CS) type ref to ZCL_TRCKTRSR_CONTAINER_TREE .
+  methods SHOW_SCREEN
+    importing
+      !IV_NUMBER type CHAR01 optional .
 protected section.
 private section.
 
@@ -65,7 +74,7 @@ CLASS ZCL_TRCKTRSR_CONTAINER_TREE IMPLEMENTATION.
   endmethod.
 
 
-  method APPEND_OBJECT.
+  METHOD append_object.
 
 
 
@@ -79,6 +88,21 @@ CLASS ZCL_TRCKTRSR_CONTAINER_TREE IMPLEMENTATION.
     TRY.
         DATA(lv_varname) = mt_object_info[ id = lv_name ]-name.
       CATCH cx_sy_itab_line_not_found.
+        CASE io_control.
+          WHEN cl_gui_container=>default_screen. lv_varname = 'DEFAULT'.
+          WHEN cl_gui_container=>desktop.        lv_varname = 'DESKTOP'.
+          WHEN cl_gui_container=>screen0.        lv_varname = 'SCREEN0'.
+          WHEN cl_gui_container=>screen1.        lv_varname = 'SCREEN1'.
+          WHEN cl_gui_container=>screen2.        lv_varname = 'SCREEN2'.
+          WHEN cl_gui_container=>screen3.        lv_varname = 'SCREEN3'.
+          WHEN cl_gui_container=>screen4.        lv_varname = 'SCREEN4'.
+          WHEN cl_gui_container=>screen5.        lv_varname = 'SCREEN5'.
+          WHEN cl_gui_container=>screen6.        lv_varname = 'SCREEN6'.
+          WHEN cl_gui_container=>screen7.        lv_varname = 'SCREEN7'.
+          WHEN cl_gui_container=>screen8.        lv_varname = 'SCREEN8'.
+          WHEN cl_gui_container=>screen9.        lv_varname = 'SCREEN9'.
+        ENDCASE.
+
     ENDTRY.
 
     mo_tree->add_node(
@@ -100,7 +124,7 @@ CLASS ZCL_TRCKTRSR_CONTAINER_TREE IMPLEMENTATION.
     append_children( io_control ).
 
 
-  endmethod.
+  ENDMETHOD.
 
 
   method APPEND_PARENT.
@@ -129,44 +153,51 @@ CLASS ZCL_TRCKTRSR_CONTAINER_TREE IMPLEMENTATION.
     mo_tree->create_tree_control( mo_box ).
 
     DATA lt_fieldlist    TYPE STANDARD TABLE OF rfieldlist.
-    FIELD-SYMBOLS <object> TYPE any. "REF TO cl_gui_docking_container." object.
+    FIELD-SYMBOLS <object> TYPE any.
     DATA control TYPE REF TO cl_gui_control.
     DATA lv_global_name TYPE string.
 
-    CALL FUNCTION 'GET_GLOBAL_SYMBOLS'
-      EXPORTING
-        program      = iv_repid
-        name_pattern = '*'
-      TABLES
-        fieldlist    = lt_fieldlist.
+    IF iv_repid IS NOT INITIAL.
 
-    DATA ls_object_info TYPE ts_object_info.
+      CALL FUNCTION 'GET_GLOBAL_SYMBOLS'
+        EXPORTING
+          program      = iv_repid
+          name_pattern = '*'
+        TABLES
+          fieldlist    = lt_fieldlist.
 
-    LOOP AT lt_fieldlist INTO DATA(ls_fieldinfo)
-    WHERE type       = 'r'
-    AND   reftypeloc = 'CLAS'
-    AND   name(1)   <> '%'.
-      CLEAR ls_object_info.
-      ls_object_info-name = ls_fieldinfo-name.
+      DATA ls_object_info TYPE ts_object_info.
 
-      TRY.
-          lv_global_name = |({ iv_repid }){ ls_fieldinfo-name }|.
-          ASSIGN (lv_global_name) TO <object>. " CASTING.
+      LOOP AT lt_fieldlist INTO DATA(ls_fieldinfo)
+      WHERE type       = 'r'
+      AND   reftypeloc = 'CLAS'
+      AND   name(1)   <> '%'.
+        CLEAR ls_object_info.
+        ls_object_info-name = ls_fieldinfo-name.
 
-          IF sy-subrc = 0
-          AND <object> IS BOUND
-          AND <object> IS INSTANCE OF cl_gui_object.
-            control ?= <object>.
-            ls_object_info-ref  = control.
-            ls_object_info-id   = get_objname( control ).
-            INSERT ls_object_info INTO TABLE mt_object_info.
-          ENDIF.
-        CATCH cx_sy_assign_cast_illegal_cast.
-      ENDTRY.
-    ENDLOOP.
+        TRY.
+            lv_global_name = |({ iv_repid }){ ls_fieldinfo-name }|.
+            ASSIGN (lv_global_name) TO <object>. " CASTING.
+
+            IF sy-subrc = 0
+            AND <object> IS BOUND
+            AND <object> IS INSTANCE OF cl_gui_object.
+              control ?= <object>.
+              ls_object_info-ref  = control.
+              ls_object_info-id   = get_objname( control ).
+              INSERT ls_object_info INTO TABLE mt_object_info.
+            ENDIF.
+          CATCH cx_sy_assign_cast_illegal_cast.
+        ENDTRY.
+      ENDLOOP.
+    ENDIF.
 
 
+  ENDMETHOD.
 
+
+  METHOD factory.
+    ro_cs = NEW zcl_trcktrsr_container_tree( iv_repid ).
   ENDMETHOD.
 
 
@@ -199,17 +230,73 @@ CLASS ZCL_TRCKTRSR_CONTAINER_TREE IMPLEMENTATION.
   endmethod.
 
 
-  method SHOW.
+  METHOD show.
 
+    DATA lo_control TYPE REF TO cl_gui_control.
+    DATA lo_object  TYPE REF TO object.
 
     mo_tree->delete_all_nodes( ).
 
-    append_object( io_control = io_container iv_parent = space ).
+    IF io_control IS NOT INITIAL.
+      lo_control ?= io_control.
+    ELSEIF iv_object_id IS NOT INITIAL.
+      CALL 'OBJMGR_GET_INFO' ID 'OPNAME' FIELD 'WEAK_REF_GET'
+                       ID 'OID'    FIELD iv_object_id
+                       ID 'OBJ'    FIELD lo_object.
+
+      IF lo_object IS BOUND AND lo_object IS INSTANCE OF cl_gui_control.
+        lo_control ?= lo_object.
+      ENDIF.
+    ENDIF.
+
+    CHECK lo_control IS BOUND.
+
+    append_object( io_control = lo_control iv_parent = space ).
 
     show_structure( ).
 
 
-  endmethod.
+  ENDMETHOD.
+
+
+  METHOD show_screen.
+
+
+    mo_tree->delete_all_nodes( ).
+
+    CASE iv_number.
+      WHEN space. "Default
+        append_object( io_control = cl_gui_container=>default_screen iv_parent = space ).
+      WHEN 'D'. "Desktop
+        append_object( io_control = cl_gui_container=>desktop iv_parent = space ).
+      WHEN '0'.
+        append_object( io_control = cl_gui_container=>screen0 iv_parent = space ).
+      WHEN '1'.
+        append_object( io_control = cl_gui_container=>screen1 iv_parent = space ).
+      WHEN '2'.
+        append_object( io_control = cl_gui_container=>screen2 iv_parent = space ).
+      WHEN '3'.
+        append_object( io_control = cl_gui_container=>screen3 iv_parent = space ).
+      WHEN '4'.
+        append_object( io_control = cl_gui_container=>screen4 iv_parent = space ).
+      WHEN '5'.
+        append_object( io_control = cl_gui_container=>screen5 iv_parent = space ).
+      WHEN '6'.
+        append_object( io_control = cl_gui_container=>screen6 iv_parent = space ).
+      WHEN '7'.
+        append_object( io_control = cl_gui_container=>screen7 iv_parent = space ).
+      WHEN '8'.
+        append_object( io_control = cl_gui_container=>screen8 iv_parent = space ).
+      WHEN '9'.
+        append_object( io_control = cl_gui_container=>screen9 iv_parent = space ).
+      WHEN OTHERS.
+        RETURN.
+    ENDCASE.
+
+    show_structure( ).
+
+
+  ENDMETHOD.
 
 
   METHOD show_structure.

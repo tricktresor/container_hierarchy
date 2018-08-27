@@ -11,6 +11,10 @@
     <item>/README.md</item>
     <item>/package.json</item>
     <item>/.travis.yml</item>
+    <item>/container_tree.png</item>
+    <item>/container_tree_demo.png</item>
+    <item>/container_tree_vars.png</item>
+    <item>/container_tree_vars_debugger.png</item>
    </IGNORE>
   </DATA>
  </asx:values>
